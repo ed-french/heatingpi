@@ -7,7 +7,7 @@ if __name__=="__main__":
 from state_machine import StateMachine
 import time
 
-
+import relays
 
 
 
@@ -20,7 +20,13 @@ class HeatingSM(StateMachine):
                          initial_state="Initialising",
                          subscribers=[])
         self.demanding_heat:bool=False
+        self.pump_relay=relays.heating_pump
+        self.valve_relay=relays.heating_valve
+        
     
+    @property
+    def burn_wanted(self)->bool:
+        return self.state=="Heating On"
 
 
     def step(self):
@@ -62,17 +68,21 @@ class HeatingSM(StateMachine):
 
     def open_valve(self):
         logging.info("Opening valve")
+        self.valve_relay.on()
         return
     
     def close_valve(self):
         logging.info("Closing valve")
+        self.valve_relay.off()
         return
     
     def start_pump(self):
         logging.info("Starting pump")
+        self.pump_relay.on()
 
     def stop_pump(self):
         logging.info("Stopping pump")
+        self.pump_relay.off()
 
         
     def heat_please(self):
@@ -134,13 +144,17 @@ def pause(time_s):
 
 
 
+
+
+
 if __name__=="__main__":
-    heat=HeatingSM()
-    heat.start()
+    heating=HeatingSM()
+    
+    heating.start()
     pause(6)
-    heat.heat_please()
+    heating.heat_please()
     pause(6)
-    heat.heat_off_please()
+    heating.heat_off_please()
     pause(6)
 
-    heat.stop()
+    heating.stop()
