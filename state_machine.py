@@ -40,7 +40,8 @@ class StateMachine(threading.Thread):
     def state(self):
         return self._state
 
-
+    def add_subscriber(self,callback:callable):
+        self.subscribers.append(callback)
     
     def set_state(self,*,new_state:str,reason:str="",timeout_s:float=-1):
         """
@@ -52,7 +53,7 @@ class StateMachine(threading.Thread):
         """
 
 
-        # tell subscribers
+        
         if new_state not in self.valid_states:
             raise ValueError(f"New state of {new_state} for {self.name} because of {reason} is not one of the allowed states: {self.valid_states}")
         
@@ -63,6 +64,10 @@ class StateMachine(threading.Thread):
         else:
             self.timeout_set=False
 
+        # We don't need to do anything if the new state is the same as before
+        if self.state==new_state:
+            return
+        
         self.previous_state=self.state
         self._state=new_state
         self.last_change_reason=reason

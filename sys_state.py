@@ -49,7 +49,9 @@ def get_main_system_state(url)->SysHeatState:
     r=requests.get(url)
     main_state=r.json()
     # logging.info(f"Found state: {main_state}")
-    return SysHeatState.from_JSON(main_state)
+    shs=SysHeatState.from_JSON(main_state)
+    logging.info(f"Server says:.....................    {shs.hot_water_currently_on=} ..........    {shs.heating_currently_on=}")
+    return shs
 
 
 
@@ -72,6 +74,7 @@ class SystemState(threading.Thread):
         self.instance_count+=1
         self.name="MainSystemStateThread"
         self.burn_relay=relays.boiler_heat_req
+        self.burning_now=False
         self.burn_relay.off()
 
         # These are the two threaded state machines that handle the two circuits
@@ -82,10 +85,16 @@ class SystemState(threading.Thread):
         self.stopped=False
         self.server_state:SysHeatState|None=None
         self.hot_water_overheat_condition=False
+        self.old_hw_state:bool=False
+        self.old_heat_state:bool=False
 
         # Start the two circuit state machines
         self.heating.start()
         self.hot_water.start()
+        self.burn_callback = lambda *args, **kwargs: self.fire_boiler_if_required(*args, **kwargs)
+        self.heating.add_subscriber(self.burn_callback)
+        self.hot_water.add_subscriber(self.burn_callback)
+
 
     def update_demands(self):
         """
@@ -93,23 +102,79 @@ class SystemState(threading.Thread):
             heating or hot water is required to be on
             and whether the boiler should run
         """
-        ...
+
+        
+        # Check if heat is currently called-for
+        new_heat_state:bool=self.server_state.heating_currently_on
+        new_hw_state:bool=self.server_state.hot_water_currently_on
+
+
+        logging.debug(f"###### OLD : {self.old_heat_state}   >>>>> {new_heat_state}")
+
+
+
+        if not new_heat_state==self.old_heat_state:# We have a change in demand....
+            self.old_heat_state=new_heat_state
+            logging.info("State change detected for heating")
+            if new_heat_state:
+                self.heating.heat_please()
+            else:
+                logging.info("Switching off heating!!!!!!!!")
+                self.heating.heat_off_please()
+
+        if not new_hw_state==self.old_hw_state:
+            self.old_hw_state=new_hw_state
+            if new_hw_state:
+                self.hot_water.heat_please()
+            else:
+                self.hot_water.heat_off_please()
+
+        self.fire_boiler_if_required()
+        
+    def fire_boiler_if_required(self,**kwargs):
+        """
+            This just fires the boiler if that's appropriate
+
+            Note: it get's called when a demand change is calculated
+            but also as a result of being subscribed to state changes
+            for the heating or hot water state machines!
+        
+        """
+        # Master rule, hot water over temperature=>immediate shutdown 
+        # logging.info(f"fire boiler being tested : {kwargs}")
+        if self.hot_water_overheat_condition:
+            self.burn_relay.off()
+            logging.error(f"FORCED BOILER OFF DUE TO HOT WATER OVER-TEMPERATURE CONDITION")
+            return # Will do nothing else
+        
+        burn_wanted:bool=self.hot_water.burn_wanted | self.heating.burn_wanted
+        if burn_wanted==self.burning_now:
+            return # we are already doing the right thing
+        if burn_wanted:
+            self.burn_relay.on()
+        else:
+            self.burn_relay.off()
+
+        self.burning_now=burn_wanted
+
+
 
     def run(self):
         next_get_hw=time.time()
         while not self.stop_requested:
             if time.time()>next_get_hw:
-                next_get_hw+=settings.HOT_WATER_FETCH_INTERVAL_S
+                next_get_hw+=settings.SERVER_STATE_FETCH_INTERVAL_S
                 self.server_state=get_main_system_state(settings.URL_TO_FETCH_SYSTEM_STATE)
                 if self.server_state.hot_water_temperature>settings.HOT_WATER_SHUTDOWN_TEMPERATURE:
                     logging.error(f"Forced to enter overheat condition due to high temperature")
                     self.hot_water_overheat_condition=True
-                    self.update_demands()
+
                 if self.server_state.hot_water_last_temp_dt<datetime.datetime.now()-datetime.timedelta(minutes=10):
                     logging.error(f"Forced to enter overheat condition because our temperature reading is too old")
                     self.hot_water_overheat_condition=True
-                    self.update_demands()
-                
+
+            
+            self.update_demands() # Calculates if the burn relay should be set, 
 
 
             time.sleep(2.02)
@@ -137,15 +202,20 @@ class SystemState(threading.Thread):
         raise Exception(f"Failed to stop {self.name} gracefully in 20 seconds")
     
     
+def pause_timeout(timeout_s:float):
+    endtime=time.time()+timeout_s
+    while time.time()<endtime:
+        time.sleep(1)
 
 
 if __name__=="__main__":
     testsys=SystemState()
     testsys.start()
-    endtime=time.time()+100
-    while time.time()<endtime:
-        time.sleep(4)
-        logging.info("testtick")
+    pause_timeout(100)
+    # testsys.hot_water.heat_please()
+    # pause_timeout(10)
+    # testsys.hot_water.heat_off_please()
+    # pause_timeout(10)
     testsys.stop()
     time.sleep(4)
     print("finished")
