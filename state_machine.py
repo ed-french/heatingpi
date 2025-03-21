@@ -73,7 +73,7 @@ class StateMachine(threading.Thread):
 
 
         
-    def stop(self):
+    def stop(self,block_timeout_s:float=10):
         self.stop_requested=True
         logging.debug(f"{self.name}->stop requested")
         end_time=time.time()+10 # Wait 10 seconds

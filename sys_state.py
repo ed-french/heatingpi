@@ -15,7 +15,7 @@ all the state machines and state variables live here!
 
 """
 
-import simple_heat
+import hot_water_heat_sm
 import threading
 import relays
 import requests
@@ -74,11 +74,18 @@ class SystemState(threading.Thread):
         self.burn_relay=relays.boiler_heat_req
         self.burn_relay.off()
 
-        self.heating=simple_heat.HeatingSM()
+        # These are the two threaded state machines that handle the two circuits
+        self.heating=hot_water_heat_sm.HeatWaterSM(name="heating",pump_relay=relays.heating_pump,valve_relay=relays.heating_valve)
+        self.hot_water=hot_water_heat_sm.HeatWaterSM(name="hot water",pump_relay=relays.hot_water_pump,valve_relay=relays.hot_water_valve)
+        
         self.stop_requested=False
-        self.stoped=False
+        self.stopped=False
         self.server_state:SysHeatState|None=None
         self.hot_water_overheat_condition=False
+
+        # Start the two circuit state machines
+        self.heating.start()
+        self.hot_water.start()
 
     def update_demands(self):
         """
@@ -111,15 +118,23 @@ class SystemState(threading.Thread):
 
 
     def stop(self):
+        
+
+        # stop the two state machines
+        self.heating.stop(block_timeout_s=4)
+        self.hot_water.stop(block_timeout_s=4)
+        
+
         self.stop_requested=True
+
         timeout=time.time()+20
         while time.time()<timeout:
-            if self.stopped:
+            if self.stopped and self.heating.stopped and self.hot_water.stopped:
                 logging.info(f"{self.name} now stopped gracefully")
                 return
             time.sleep(0.93)
 
-        raise Exception(f"Failed to stop thread {self.name} gracefully in 20 seconds")
+        raise Exception(f"Failed to stop {self.name} gracefully in 20 seconds")
     
     
 
