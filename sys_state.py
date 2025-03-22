@@ -76,10 +76,17 @@ class SystemState(threading.Thread):
         self.burn_relay=relays.boiler_heat_req
         self.burning_now=False
         self.burn_relay.off()
+        self.burn_callback = lambda *args, **kwargs: self.fire_boiler_if_required(*args, **kwargs)
+        self.manage_temperature_callback = lambda hot_water_state : self.manage_temperature(hw_state=hot_water_state)
 
         # These are the two threaded state machines that handle the two circuits
-        self.heating=hot_water_heat_sm.HeatWaterSM(name="heating",pump_relay=relays.heating_pump,valve_relay=relays.heating_valve)
-        self.hot_water=hot_water_heat_sm.HeatWaterSM(name="hot water",pump_relay=relays.hot_water_pump,valve_relay=relays.hot_water_valve)
+        self.heating=hot_water_heat_sm.HeatWaterSM(name="heating",
+                                                   pump_relay=relays.heating_pump,
+                                                   valve_relay=relays.heating_valve)
+        self.hot_water=hot_water_heat_sm.HeatWaterSM(name="hot water",
+                                                     pump_relay=relays.hot_water_pump,
+                                                     valve_relay=relays.hot_water_valve,
+                                                     control_while_on_callback=self.manage_temperature_callback)
         
         self.stop_requested=False
         self.stopped=False
@@ -91,9 +98,33 @@ class SystemState(threading.Thread):
         # Start the two circuit state machines
         self.heating.start()
         self.hot_water.start()
-        self.burn_callback = lambda *args, **kwargs: self.fire_boiler_if_required(*args, **kwargs)
+        
+        
         self.heating.add_subscriber(self.burn_callback)
         self.hot_water.add_subscriber(self.burn_callback)
+
+    def manage_temperature(self,hw_state:hot_water_heat_sm.HeatWaterSM):
+
+
+        assert isinstance(hw_state,hot_water_heat_sm.HeatWaterSM),f"Manage temperature called with hw_state not being the state engine, but {type(hw_state)}"
+
+        if not hw_state.state=="On":
+            raise ValueError("Attempt to manage temperature when the hw isn't on")
+
+        logging.info("\nChecking hot water temperature, do we need head?")
+        current_actual=self.server_state.hot_water_temperature
+        if current_actual>settings.HOT_WATER_OFF_TEMPERATURE:
+            logging.info("HW REACHED REQUIRED TEMPERATURE- SWITCHING OFF PUMP")
+            hw_state.stop_pump() # Will stop the pump and indirectly this will indicate if burn is required
+            return
+
+        if current_actual<settings.HOT_WATER_ON_TEMPERATURE:
+            logging.info("HW BELOW REQUIRED TEMPERATURE- SWITCHING ON PUMP")
+            hw_state.start_pump() # Will stop the pump and indirectly this will indicate if burn is required
+            return
+
+        logging.info(f"How water is {current_actual}, which is between {settings.HOT_WATER_ON_TEMPERATURE} and {settings.HOT_WATER_OFF_TEMPERATURE} so no heat needed")
+
 
 
     def update_demands(self):
@@ -109,7 +140,7 @@ class SystemState(threading.Thread):
         new_hw_state:bool=self.server_state.hot_water_currently_on
 
 
-        logging.debug(f"###### OLD : {self.old_heat_state}   >>>>> {new_heat_state}")
+        # logging.debug(f"###### OLD : {self.old_heat_state}   >>>>> {new_heat_state}")
 
 
 
@@ -147,7 +178,9 @@ class SystemState(threading.Thread):
             logging.error(f"FORCED BOILER OFF DUE TO HOT WATER OVER-TEMPERATURE CONDITION")
             return # Will do nothing else
         
-        burn_wanted:bool=self.hot_water.burn_wanted | self.heating.burn_wanted
+        hw_burn=self.hot_water.burn_wanted
+        heat_burn=self.heating.burn_wanted
+        burn_wanted:bool=hw_burn | heat_burn
         if burn_wanted==self.burning_now:
             return # we are already doing the right thing
         if burn_wanted:
@@ -211,11 +244,11 @@ def pause_timeout(timeout_s:float):
 if __name__=="__main__":
     testsys=SystemState()
     testsys.start()
-    pause_timeout(100)
-    # testsys.hot_water.heat_please()
-    # pause_timeout(10)
-    # testsys.hot_water.heat_off_please()
-    # pause_timeout(10)
+    pause_timeout(5)
+    testsys.hot_water.heat_please()
+    pause_timeout(60)
+    testsys.hot_water.heat_off_please()
+    pause_timeout(10)
     testsys.stop()
     time.sleep(4)
     print("finished")

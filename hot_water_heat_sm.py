@@ -10,12 +10,25 @@ import time
 import relays
 
 import settings
-
+from typing import Callable
 
 
 
 class HeatWaterSM(StateMachine):
-    def __init__(self,*,name:str,pump_relay:relays.Relay,valve_relay:relays.Relay):
+    def __init__(self,*,name:str,
+                 pump_relay:relays.Relay,
+                 valve_relay:relays.Relay,
+                 control_while_on_callback:Callable|None=None):
+        """
+            Theadable class to deal with the management of Hot Water or Heating
+            (one for each)
+            passed the pump and valve relays
+            optionally, can be passed a callable, control_while_on_callback
+            this will be run every loop if set and the system is on
+            and can be used to switch the pump on and off
+            to keep temperature within the required bounds
+        
+        """
         super().__init__(name=name,
                          states=["Initialising","Off","Waiting Valve Open","On","Waiting Valve Closed"],
                          initial_state="Initialising",
@@ -23,11 +36,33 @@ class HeatWaterSM(StateMachine):
         self.demanding_heat:bool=False
         self.pump_relay=pump_relay
         self.valve_relay=valve_relay
+        self.control_while_on_callback=control_while_on_callback
         
     
     @property
     def burn_wanted(self)->bool:
-        return self.state=="On"
+        return self.pump_relay.is_on()
+
+    def valve_is_open(self)->bool:
+        # FAKE FOR NOW
+        # Fakes valve for now, will use a separate system to monitor
+        # valve state over serial
+        
+        plenty_of_time_passed:bool=(time.time()-self.last_change_time)>settings.FAKE_WAIT_FOR_VALVE_TIME_S
+        match self.state:
+            case "Initialising":
+                return False
+            case "Off":
+                return False
+            case "On":
+                return True
+            case "Waiting Valve Open":
+                return plenty_of_time_passed
+            case "Waiting Valve Closed":
+                return not plenty_of_time_passed
+            case _:
+                raise ValueError(f"Unexpected state {self.state} when faking valve position")
+            
 
 
     def step(self):
@@ -47,24 +82,24 @@ class HeatWaterSM(StateMachine):
 
             case "Waiting Valve Open":
                 logging.info(f"{self.name}: Checking if valve has finished opening...")
-
-
-
-                # FAKE FOR NOW
-                if self.last_change_time<time.time()-settings.FAKE_WAIT_FOR_VALVE_TIME_S:
+                # We don't start the pump until the valve has opened...
+                if self.valve_is_open():
                     self.start_pump()
                     self.set_state(new_state="On",reason=f"{self.name} valve now open")
                     return
                 
             case "On":
-                return # Nothing to do here, external code will change the state to off sometime
+                if self.control_while_on_callback:
+                    self.control_while_on_callback(self)
+                return 
             
             case "Waiting Valve Closed":
                 logging.info(f"{self.name}:Checking if valve has closed")
 
 
-                # FAKE FOR NOW
-                if self.last_change_time<time.time()-settings.FAKE_WAIT_FOR_VALVE_TIME_S:
+                # We wait until the valve is closed then we stop the pump
+                # not entirely sure why, but it's what the old system does
+                if not self.valve_is_open():
                     self.stop_pump()
                     self.set_state(new_state="Off",reason=f"{self.name}: valve now closed")
                     return
@@ -109,7 +144,7 @@ class HeatWaterSM(StateMachine):
                 logging.info(f"{self.name}: Ignoring heat request, it's already on")
                 return
             case "Waiting Valve Closed":
-                self.start_opening_valve()
+                self.open_valve()
                 self.set_state(new_state="Waiting Valve Open",reason=f"{self.name}:heat requested")
                 return
 

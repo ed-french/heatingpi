@@ -44,6 +44,10 @@ class Relay:
     def off(self):
         self.set_value(RelayIs.OFF)
 
+    def is_on(self)->bool:
+        # interrogated to see if the pump is on, so that burn requirement can be determined
+        return self.output.value==RelayIs.ON
+
     def set_value(self,value):
         if value == RelayIs.OFF:
             self.output.off()
