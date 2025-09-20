@@ -24,6 +24,7 @@ import datetime
 import json
 import time
 from dataclasses import dataclass
+import valves_and_temps
 
 @dataclass
 class SysHeatState:
@@ -79,14 +80,24 @@ class SystemState(threading.Thread):
         self.burn_callback = lambda *args, **kwargs: self.fire_boiler_if_required(*args, **kwargs)
         self.manage_temperature_callback = lambda hot_water_state : self.manage_temperature(hw_state=hot_water_state)
 
+        # Start monitoring the temperatures and valve states:
+        self.valve_temp_states=valves_and_temps.ValveTempState.new_blank() # Continuously updates by the thread below by serial monitoring
+        self.valve_temp_thread=valves_and_temps.ValvesTemps(self.valve_temp_states)
+        self.valve_temp_thread.start()
+
+
+
         # These are the two threaded state machines that handle the two circuits
         self.heating=hot_water_heat_sm.HeatWaterSM(name="heating",
                                                    pump_relay=relays.heating_pump,
-                                                   valve_relay=relays.heating_valve)
+                                                   valve_relay=relays.heating_valve,
+                                                   valve_state_fn=self.valve_temp_states.get_rad_valve_open)
         self.hot_water=hot_water_heat_sm.HeatWaterSM(name="hot water",
                                                      pump_relay=relays.hot_water_pump,
                                                      valve_relay=relays.hot_water_valve,
+                                                     valve_state_fn=self.valve_temp_states.get_hw_valve_open,
                                                      control_while_on_callback=self.manage_temperature_callback)
+        
         
         self.stop_requested=False
         self.stopped=False

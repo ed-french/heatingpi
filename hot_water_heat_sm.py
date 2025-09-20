@@ -14,10 +14,12 @@ from typing import Callable
 
 
 
+
 class HeatWaterSM(StateMachine):
     def __init__(self,*,name:str,
                  pump_relay:relays.Relay,
                  valve_relay:relays.Relay,
+                 valve_state_fn:callable,
                  control_while_on_callback:Callable|None=None):
         """
             Theadable class to deal with the management of Hot Water or Heating
@@ -37,6 +39,7 @@ class HeatWaterSM(StateMachine):
         self.pump_relay=pump_relay
         self.valve_relay=valve_relay
         self.control_while_on_callback=control_while_on_callback
+        self.valve_state_fn=valve_state_fn
         
     
     @property
@@ -44,24 +47,25 @@ class HeatWaterSM(StateMachine):
         return self.pump_relay.is_on()
 
     def valve_is_open(self)->bool:
+        return self.valve_state_fn()
         # FAKE FOR NOW
         # Fakes valve for now, will use a separate system to monitor
         # valve state over serial
         
-        plenty_of_time_passed:bool=(time.time()-self.last_change_time)>settings.FAKE_WAIT_FOR_VALVE_TIME_S
-        match self.state:
-            case "Initialising":
-                return False
-            case "Off":
-                return False
-            case "On":
-                return True
-            case "Waiting Valve Open":
-                return plenty_of_time_passed
-            case "Waiting Valve Closed":
-                return not plenty_of_time_passed
-            case _:
-                raise ValueError(f"Unexpected state {self.state} when faking valve position")
+        # plenty_of_time_passed:bool=(time.time()-self.last_change_time)>settings.FAKE_WAIT_FOR_VALVE_TIME_S
+        # match self.state:
+        #     case "Initialising":
+        #         return False
+        #     case "Off":
+        #         return False
+        #     case "On":
+        #         return True
+        #     case "Waiting Valve Open":
+        #         return plenty_of_time_passed
+        #     case "Waiting Valve Closed":
+        #         return not plenty_of_time_passed
+        #     case _:
+        #         raise ValueError(f"Unexpected state {self.state} when faking valve position")
             
 
 
