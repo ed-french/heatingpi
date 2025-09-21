@@ -146,7 +146,7 @@ class MainState(threading.Thread):
                         
 
             else:
-                match self.heat_state:
+                match self.heating:
                     case "HEATING":
                         # We need to switch off the heating
                         relays.heating_valve.off()
