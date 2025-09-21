@@ -88,6 +88,7 @@ class ValvesTemps(threading.Thread):
 
 
 if __name__=="__main__":
+    print("Starting")
     shared_state=ValveTempState.new_blank()
     scanner=ValvesTemps(shared_state=shared_state)
     scanner.start()

@@ -51,7 +51,12 @@ def get_main_system_state(url)->SysHeatState:
     main_state=r.json()
     # logging.info(f"Found state: {main_state}")
     shs=SysHeatState.from_JSON(main_state)
-    logging.info(f"Server says:.....................    {shs.hot_water_currently_on=} ..........    {shs.heating_currently_on=}")
+    logging.info(f"""Server says:.....................
+            {shs.heating_currently_on=}
+            {shs.hot_water_temperature=}
+            {shs.hot_water_last_temp_dt=}
+            {shs.hot_water_currently_on=}
+            {shs.heating_currently_on=}""")
     return shs
 
 
@@ -108,11 +113,16 @@ class SystemState(threading.Thread):
 
         # Start the two circuit state machines
         self.heating.start()
-        self.hot_water.start()
+        self.hot_water.start() #
         
         
         self.heating.add_subscriber(self.burn_callback)
         self.hot_water.add_subscriber(self.burn_callback)
+
+    def __str__(self):
+        return f"""
+        Heating: {self.heating}
+        Hot Water: {self.hot_water}"""
 
     def manage_temperature(self,hw_state:hot_water_heat_sm.HeatWaterSM):
 
@@ -146,9 +156,12 @@ class SystemState(threading.Thread):
         """
 
         
-        # Check if heat is currently called-for
+        # Check if heat is currently called-for from the main server
         new_heat_state:bool=self.server_state.heating_currently_on
         new_hw_state:bool=self.server_state.hot_water_currently_on
+
+        # We reckon heat is then wanted if the water is too cold
+        # or always when the heating is "on"
 
 
         # logging.debug(f"###### OLD : {self.old_heat_state}   >>>>> {new_heat_state}")
@@ -250,6 +263,9 @@ def pause_timeout(timeout_s:float):
     endtime=time.time()+timeout_s
     while time.time()<endtime:
         time.sleep(1)
+
+heating=SystemState() # The singular instance
+heating.start()
 
 
 if __name__=="__main__":

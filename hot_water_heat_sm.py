@@ -35,12 +35,15 @@ class HeatWaterSM(StateMachine):
                          states=["Initialising","Off","Waiting Valve Open","On","Waiting Valve Closed"],
                          initial_state="Initialising",
                          subscribers=[])
+        self.name=name
         self.demanding_heat:bool=False
         self.pump_relay=pump_relay
         self.valve_relay=valve_relay
         self.control_while_on_callback=control_while_on_callback
         self.valve_state_fn=valve_state_fn
         
+    def __str__(self):
+        return f"{self.name} - State: {self.state} Demanding Heat: {self.demanding_heat}"
     
     @property
     def burn_wanted(self)->bool:
@@ -135,6 +138,8 @@ class HeatWaterSM(StateMachine):
         
     def heat_please(self):
         # Actions to be done depend on the current state:
+
+        logging.info(f"{self.name} - heat_please has been requested!")
 
         match self.state:
             case "Off":

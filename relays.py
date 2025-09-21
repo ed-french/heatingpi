@@ -68,7 +68,7 @@ class Relay:
 
 
 boiler_heat_req=Relay("boiler_heat_req",1)
-hot_water_valve=Relay("hot_water_value",2)
+hot_water_valve=Relay("hot_water_valve",2)
 hot_water_pump=Relay("hot_water_pump",3)
 heating_valve=Relay("heating_valve",4)
 heating_pump=Relay("heating_pump",5)
@@ -77,13 +77,13 @@ if __name__=="__main__":
     end_time=time.time()+10
     while time.time()<end_time:
         boiler_heat_req.on()
-        time.sleep(0.5)
+        time.sleep(3)
         hot_water_valve.on()
-        time.sleep(0.5)
+        time.sleep(3)
         hot_water_pump.on()
-        time.sleep(0.5)
+        time.sleep(3)
         heating_valve.on()
-        time.sleep(0.5)
+        time.sleep(3)
         heating_pump.on()
         time.sleep(0.5)
         boiler_heat_req.off()

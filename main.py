@@ -14,7 +14,7 @@ app=Flask(__name__)
 
 @app.route("/")
 def index():
-    return f"Heating currently: {ss.heating.state}"
+    return f"Heating currently: {ss.heating}"
 
 @app.route("/heat_on")
 def heat_on():
@@ -35,5 +35,5 @@ def heat_off():
 
 
 if __name__=="__main__":
-    ss.heating.start()
+
     app.run(host="0.0.0.0",port=8181)
