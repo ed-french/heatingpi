@@ -54,11 +54,17 @@ class SimpleState:
     def __init__(self,valid_states,starting_state):
         self.valid_states=valid_states
         self.state=starting_state
+        self.last_changed=datetime.datetime.now()
 
     def change_state(self,new_state):
         if new_state not in self.valid_states:
             raise ValueError(f"{new_state} is not one of the valid states ({self.valid_states})")
+        self.last_changed=datetime.datetime.now()
         self.state=new_state
+
+    def mins_since_change(self)->float:
+        delta=datetime.datetime.now()-self.last_changed
+        return delta.total_seconds()/60.0
 
     def __str__(self):
         return self.state
@@ -142,6 +148,12 @@ class MainState(threading.Thread):
                         # is the valve open
                         if self.valve_temp_states.rad_valve_open:
                             relays.heating_pump.on()
+                            self.heating.change_state("HEATING")
+
+                        if self.heating.mins_since_change()>3.0:
+                            # Been opening for 3 minutes, something is wrong, turn it off
+                            logging.error(f"\n{'='*60}\nHeating valve failed to open in 3 minutes, turning pump on anyway!\n{'='*60}\n")
+                            relays.heating_pump
                             self.heating.change_state("HEATING")
                         
 
