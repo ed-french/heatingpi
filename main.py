@@ -1,12 +1,16 @@
 import logging
 if __name__=="__main__":
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG,
+                        format="%(asctime)s [%(threadName)s] %(levelname)s %(name)s: %(message)s",
+                        datefmt="%Y-%m-%d %H:%M:%S")
 
 
 from flask import Flask, request
 
-import sys_state as ss
+import simpler
 
+main_state=simpler.MainState()
+main_state.start()
 
 
 app=Flask(__name__)
@@ -14,17 +18,15 @@ app=Flask(__name__)
 
 @app.route("/")
 def index():
-    return f"Heating currently: {ss.heating}"
+    # returns the state string as a text/plain response
+    response=app.response_class(
+        response=str(main_state),
+        status=200,
+        mimetype="text/plain"
+    )
+    return response
 
-@app.route("/heat_on")
-def heat_on():
-    ss.heating.heat_please()
-    return "Heating going on now"
 
-@app.route("/heat_off")
-def heat_off():
-    ss.heating.heat_off_please()
-    return "Heating going off now"
 
 
 
@@ -35,5 +37,6 @@ def heat_off():
 
 
 if __name__=="__main__":
+
 
     app.run(host="0.0.0.0",port=8181)

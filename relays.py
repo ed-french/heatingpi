@@ -35,14 +35,17 @@ class Relay:
         self.output=LED(f"BOARD{self.pin}")
         self.set_value(initial_state)
         self.initial_state=initial_state
+
         
         Relay.instances.append(self)
 
     def on(self):
         self.set_value(RelayIs.ON)
+        logging.info(f">>>>>>> Switched: {self.name} on")
 
     def off(self):
         self.set_value(RelayIs.OFF)
+        logging.info(f">>>>>>> Switched: {self.name} off")
 
     def is_on(self)->bool:
         # interrogated to see if the pump is on, so that burn requirement can be determined
@@ -56,6 +59,9 @@ class Relay:
         else:
             self.output.on()
             logging.info(f">>>>> Switched {self.name} on")
+
+    def __str__(self):
+        return f"Relay {self.name} = {self.output.value==RelayIs.ON}"
 
     @classmethod
     def reset_all(cls):
