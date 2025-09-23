@@ -153,7 +153,7 @@ class MainState(threading.Thread):
                         if self.heating.mins_since_change()>3.0:
                             # Been opening for 3 minutes, something is wrong, turn it off
                             logging.error(f"\n{'='*60}\nHeating valve failed to open in 3 minutes, turning pump on anyway!\n{'='*60}\n")
-                            relays.heating_pump
+                            relays.heating_pump.on()
                             self.heating.change_state("HEATING")
                         
 
